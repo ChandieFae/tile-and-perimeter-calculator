@@ -4,9 +4,9 @@ Tile &amp; Perimeter Calculator (react)
 ---
 
 ## Tile & Perimeter Calculator that:
-Quickly lets you know the tiles, boxes, and perimeter ti make floor tile laying easy.
+Quickly lets you know the tiles, boxes, and perimeter to make floor tile laying easy.
 
-Lets you add multiple rooms (supports decimals and simple fractions like 12 1/2)
+Let's you add multiple rooms (supports decimals and simple fractions like 12 1/2)
 
 Calculates total area (sq ft), perimeter (ft) (also shown as a mixed fraction), tiles needed (with waste), and boxes needed (by box coverage)
 
