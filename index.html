@@ -1,1 +1,277 @@
+import React, { useMemo, useState } from "react";
+
+/**
+ * Beast‑Mode Tile & Perimeter Calculator
+ * - Add multiple rooms (length x width)
+ * - Computes total area, perimeter, tile count, and boxes needed
+ * - Accepts decimals and simple fractions (e.g., 12 1/2, 10.25, 3/4)
+ * - Units: feet for rooms, inches for tiles
+ *
+ * Tip: Numbers are flexible. Try inputs like "12 1/2" or "11.25".
+ */
+
+function parseNumber(input) {
+  if (input == null) return NaN;
+  const s = String(input).trim();
+  if (s === "") return NaN;
+
+  // Handle formats like "12 1/2" or "1/2"
+  const parts = s.split(/\s+/);
+  let total = 0;
+  for (const p of parts) {
+    if (/^[-+]?\d+\/\d+$/.test(p)) {
+      const [n, d] = p.split("/").map(Number);
+      if (d === 0) return NaN;
+      total += n / d;
+    } else if (!isNaN(Number(p))) {
+      total += Number(p);
+    } else {
+      return NaN;
+    }
+  }
+  return total;
+}
+
+const RoomRow = ({ index, room, onChange, onRemove }) => {
+  const [len, setLen] = useState(room.length);
+  const [wid, setWid] = useState(room.width);
+
+  const handleLen = (v) => {
+    setLen(v);
+    onChange(index, { ...room, length: v });
+  };
+  const handleWid = (v) => {
+    setWid(v);
+    onChange(index, { ...room, width: v });
+  };
+
+  return (
+    <div className="grid grid-cols-12 gap-3 items-end">
+      <div className="col-span-12 sm:col-span-4">
+        <label className="block text-sm text-gray-600">Length (ft)</label>
+        <input
+          value={len}
+          onChange={(e) => handleLen(e.target.value)}
+          placeholder="e.g., 12 or 12 1/2"
+          className="w-full rounded-2xl border p-3"
+        />
+      </div>
+      <div className="col-span-12 sm:col-span-4">
+        <label className="block text-sm text-gray-600">Width (ft)</label>
+        <input
+          value={wid}
+          onChange={(e) => handleWid(e.target.value)}
+          placeholder="e.g., 10 or 10 3/4"
+          className="w-full rounded-2xl border p-3"
+        />
+      </div>
+      <div className="col-span-12 sm:col-span-3">
+        <button
+          onClick={() => onRemove(index)}
+          className="w-full rounded-2xl border p-3 hover:bg-red-50"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  const [rooms, setRooms] = useState([
+    { length: "12", width: "10" }
+  ]);
+
+  const [tile, setTile] = useState({ lengthIn: "12", widthIn: "12" });
+  const [wastePct, setWastePct] = useState("10");
+  const [boxSqFt, setBoxSqFt] = useState("16"); // common coverage per box
+
+  const totals = useMemo(() => {
+    // Compute totals across rooms
+    let areaFt2 = 0;
+    let perimeterFt = 0;
+    let invalid = false;
+
+    rooms.forEach((r) => {
+      const L = parseNumber(r.length);
+      const W = parseNumber(r.width);
+      if (isNaN(L) || isNaN(W) || L <= 0 || W <= 0) {
+        invalid = true;
+        return;
+      }
+      areaFt2 += L * W;
+      perimeterFt += 2 * (L + W);
+    });
+
+    const tL = parseNumber(tile.lengthIn);
+    const tW = parseNumber(tile.widthIn);
+    const waste = parseNumber(wastePct);
+    const coverage = parseNumber(boxSqFt);
+
+    if (invalid || isNaN(tL) || isNaN(tW) || tL <= 0 || tW <= 0) {
+      return {
+        areaFt2: 0,
+        perimeterFt: 0,
+        tilesNeeded: 0,
+        tilesNeededWithWaste: 0,
+        boxesNeeded: 0,
+        valid: false,
+      };
+    }
+
+    const tileAreaFt2 = (tL / 12) * (tW / 12);
+    const baseTiles = areaFt2 / tileAreaFt2;
+    const tilesWithWaste = baseTiles * (1 + (isNaN(waste) ? 0 : waste / 100));
+    const tilesNeeded = Math.ceil(tilesWithWaste);
+
+    let boxesNeeded = null;
+    if (!isNaN(coverage) && coverage > 0) {
+      const boxesRaw = (areaFt2 * (1 + (isNaN(waste) ? 0 : waste / 100))) / coverage;
+      boxesNeeded = Math.ceil(boxesRaw);
+    }
+
+    return {
+      areaFt2,
+      perimeterFt,
+      tileAreaFt2,
+      baseTiles,
+      tilesNeeded,
+      boxesNeeded,
+      valid: true,
+    };
+  }, [rooms, tile, wastePct, boxSqFt]);
+
+  const addRoom = () => setRooms((rs) => [...rs, { length: "", width: "" }]);
+  const updateRoom = (idx, next) => setRooms((rs) => rs.map((r, i) => (i === idx ? next : r)));
+  const removeRoom = (idx) => setRooms((rs) => rs.filter((_, i) => i !== idx));
+
+  const setTileLen = (v) => setTile((t) => ({ ...t, lengthIn: v }));
+  const setTileWid = (v) => setTile((t) => ({ ...t, widthIn: v }));
+
+  const fmt = (n, digits = 2) => (isNaN(n) ? "—" : Number(n).toFixed(digits));
+
+  const mixedFraction = (n) => {
+    if (isNaN(n)) return "—";
+    if (!isFinite(n)) return "—";
+    const whole = Math.floor(n);
+    const frac = n - whole;
+    if (frac === 0) return `${whole}`;
+    const denom = 16;
+    const numer = Math.round(frac * denom);
+    if (numer === 0) return `${whole}`;
+    if (numer === denom) return `${whole + 1}`;
+    const g = (a, b) => (b ? g(b, a % b) : a);
+    const d = g(numer, denom);
+    return `${whole} ${numer / d}/${denom / d}`;
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-6 sm:p-10">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <header className="space-y-2">
+          <h1 className="text-3xl sm:text-4xl font-bold">Beast‑Mode Tile & Perimeter Calculator</h1>
+          <p className="text-gray-600">Add rooms, pick your tile size, and get instant counts with waste + boxes. Fractions welcome.</p>
+        </header>
+
+        {/* Rooms */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Rooms (ft)</h2>
+            <button onClick={addRoom} className="rounded-2xl border px-4 py-2 hover:bg-gray-100">+ Add Room</button>
+          </div>
+
+          <div className="space-y-3">
+            {rooms.map((r, i) => (
+              <div key={i} className="rounded-2xl border bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Room {i + 1}</h3>
+                </div>
+                <RoomRow index={i} room={r} onChange={updateRoom} onRemove={removeRoom} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Tile settings */}
+        <section className="rounded-2xl border bg-white p-4 space-y-4">
+          <h2 className="text-xl font-semibold">Tile & Packaging</h2>
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-12 sm:col-span-4">
+              <label className="block text-sm text-gray-600">Tile Length (in)</label>
+              <input
+                value={tile.lengthIn}
+                onChange={(e) => setTileLen(e.target.value)}
+                placeholder="e.g., 12"
+                className="w-full rounded-2xl border p-3"
+              />
+            </div>
+            <div className="col-span-12 sm:col-span-4">
+              <label className="block text-sm text-gray-600">Tile Width (in)</label>
+              <input
+                value={tile.widthIn}
+                onChange={(e) => setTileWid(e.target.value)}
+                placeholder="e.g., 24"
+                className="w-full rounded-2xl border p-3"
+              />
+            </div>
+            <div className="col-span-12 sm:col-span-4">
+              <label className="block text-sm text-gray-600">Waste (%)</label>
+              <input
+                value={wastePct}
+                onChange={(e) => setWastePct(e.target.value)}
+                placeholder="10"
+                className="w-full rounded-2xl border p-3"
+              />
+            </div>
+            <div className="col-span-12 sm:col-span-4">
+              <label className="block text-sm text-gray-600">Coverage per Box (sq ft)</label>
+              <input
+                value={boxSqFt}
+                onChange={(e) => setBoxSqFt(e.target.value)}
+                placeholder="e.g., 16"
+                className="w-full rounded-2xl border p-3"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Results */}
+        <section className="rounded-2xl border bg-white p-4">
+          <h2 className="text-xl font-semibold mb-3">Results</h2>
+          <div className="grid grid-cols-12 gap-4 text-sm">
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3 rounded-2xl border p-4">
+              <div className="text-gray-500">Total Area</div>
+              <div className="text-2xl font-bold">{fmt(totals.areaFt2, 2)} sq ft</div>
+            </div>
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3 rounded-2xl border p-4">
+              <div className="text-gray-500">Total Perimeter</div>
+              <div className="text-2xl font-bold">{fmt(totals.perimeterFt, 2)} ft</div>
+              <div className="text-xs text-gray-500">≈ {mixedFraction(totals.perimeterFt)} ft</div>
+            </div>
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3 rounded-2xl border p-4">
+              <div className="text-gray-500">Tile Area</div>
+              <div className="text-2xl font-bold">{fmt(totals.tileAreaFt2, 3)} sq ft</div>
+            </div>
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3 rounded-2xl border p-4">
+              <div className="text-gray-500">Tiles Needed (with waste)</div>
+              <div className="text-2xl font-bold">{totals.valid ? totals.tilesNeeded : "—"}</div>
+            </div>
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3 rounded-2xl border p-4">
+              <div className="text-gray-500">Boxes Needed (est.)</div>
+              <div className="text-2xl font-bold">{totals.valid && totals.boxesNeeded != null ? totals.boxesNeeded : "—"}</div>
+              <div className="text-xs text-gray-500">Uses box coverage + waste</div>
+            </div>
+          </div>
+          {!totals.valid && (
+            <p className="text-red-600 mt-3">Check your inputs — lengths/widths and tile size must be positive numbers (decimals or simple fractions).</p>
+          )}
+        </section>
+
+        <footer className="text-xs text-gray-500 pt-2">
+          Pro tips: Add 10–15% waste for cuts & breakage. For large format tiles, consider back‑buttering and leveling clips.
+        </footer>
+      </div>
+    </div>
+  );
+}
 
