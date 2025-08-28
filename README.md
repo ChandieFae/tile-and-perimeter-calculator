@@ -12,4 +12,4 @@ Calculates total area (sq ft), perimeter (ft) (also shown as a mixed fraction), 
 
 Uses feet for rooms and inches for tile sizes (the usual way tile is sold)
 
-It’s up on the right—tweak the inputs and you’ll get instant results.
+See ready to use standalone index.html
